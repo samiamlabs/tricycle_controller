@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+
+<robot name="ackermann_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find tricycle_controller)/test/urdf/chassis.xacro" />
+  <xacro:include filename="$(find tricycle_controller)/test/urdf/wheel_steered.xacro" />
+  <xacro:include filename="$(find tricycle_controller)/test/urdf/rear_wheel.xacro" />
+
+  <xacro:property name="M_PI" value="3.14159"/>
+
+  <!-- Wheel Mounting Positions -->
+  <xacro:property name="ground_clearance" value="0.19" />
+  <xacro:property name="wheel_x_offset" value="0.2" />
+  <xacro:property name="wheel_y_offset" value="0.05" />
+
+  <xacro:chassis/>
+
+  <!-- Wheel macros -->
+  <xacro:wheel_steered wheel_prefix="front" parent_link="base_link" wheel_origin_y="${-wheel_y_offset}" left_right="1">
+    <origin xyz="${wheelbase+wheel_x_offset} 0 ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
+  </xacro:wheel_steered>
+
+  <xacro:rear_wheel wheel_prefix="rear_left" parent_link="base_link" left_right="-1">
+    <origin xyz="0 ${track/2} ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
+  </xacro:rear_wheel>
+
+  <xacro:rear_wheel wheel_prefix="rear_right" parent_link="base_link" left_right="1">
+    <origin xyz="0 ${-track/2} ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
+  </xacro:rear_wheel>
+
+  <!-- Gazebo plugin for ROS Control -->
+  <gazebo>
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
+  </gazebo>
+
+</robot>

@@ -1,0 +1,33 @@
+tricycle_controller:
+  linear:
+    x:
+      has_velocity_limits: true
+      min_velocity: -0.5
+      max_velocity: 1.0
+      has_acceleration_limits: false
+      min_acceleration: -0.5
+      max_acceleration: 2.0
+      has_jerk_limits: false
+      max_jerk: 5.0
+  angular:
+    z:
+      has_velocity_limits: true
+      max_velocity: 2.0
+      has_acceleration_limits: false
+      max_acceleration: 2.0
+      has_jerk_limits: false
+      max_jerk: 10.0
+  steer_servo:
+      has_position_limits: true
+      max_position: 3.14
+      has_velocity_limits: true
+      max_velocity: 1.0
+      has_acceleration_limits: true
+      max_acceleration: 15.0
+  wheel_motor:
+      has_velocity_limits: true
+      max_angular_velocity: 2.0
+      has_acceleration_limits: true
+      max_angular_acceleration: 5.0
+      has_jerk_limits: true
+      max_jerk: 50

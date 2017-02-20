@@ -1,0 +1,9 @@
+tricycle_controller:
+  type: tricycle_controller/TricycleController
+  drive_wheel: front_wheel
+  drive_wheel_steer: front_steering_joint
+
+# Publish all joint states -----------------------------------
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 50
