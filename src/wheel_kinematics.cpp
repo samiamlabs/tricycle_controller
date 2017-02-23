@@ -104,23 +104,6 @@ void WheelKinematics::updateMotorRotationalVelocity()
 }
 
 
-// void WheelKinematics::publish()
-// {
-//   // TODO: add velocity limit functionality? Not here?
-//   std_msgs::Float64 servo_steer_msg;
-//   servo_steer_msg.data = servo_steer_angle_;
-//   steer_pub_.publish(servo_steer_msg);
-//
-//   std_msgs::Float64 motor_rotational_velocity_msg;
-//   motor_rotational_velocity_msg.data = motor_rotational_velocity_;
-//   vel_pub_.publish(motor_rotational_velocity_msg);
-// }
-
-// void WheelKinematics::cmdVelCallback(const geometry_msgs::Twist::ConstPtr& twist_msg)
-// {
-//   updateDesiredWheelMountMovement(-1*twist_msg->linear.x, -1*twist_msg->linear.y, twist_msg->angular.z); // Shifted sign on desired velocities -> fits base_footprint_reversed?
-// }
-
 void WheelKinematics::updateDesiredWheelMountMovement(double origo_velocity_x, double origo_velocity_y, double origo_rotation)
 {
   double circular_motion_phi = atan2(pose_y_, pose_x_);

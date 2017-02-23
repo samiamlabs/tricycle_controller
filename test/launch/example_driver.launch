@@ -1,6 +1,6 @@
 <launch>
-  <!-- Start gazebo world -->
-  <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+  <!-- Run driver -->
+  <node name="example_driver" pkg="tricycle_controller" type="example_driver_node"/>
 
   <!-- load robot -->
   <param name="robot_description"
@@ -17,9 +17,10 @@
         args="-urdf -param robot_description -model tricycle -z 0.5" respawn="false" output="screen" />
 
   <!-- Spawn controller -->
+
   <node name="controller_spawner"
         pkg="controller_manager" type="spawner" output="screen"
-        args="joint_state_controller tricycle_controller --shutdown-timeout 3"/>
+        args="tricycle_controller --shutdown-timeout 3"/>
 
   <!--
   <node pkg="joy" type="joy_node" name="joy_node">

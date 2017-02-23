@@ -10,7 +10,10 @@ TricycleController::TricycleController()
   last1_steer_angle_(0),
   last0_steer_angle_(0),
   last1_wheel_speed_(0),
-  last0_wheel_speed_(0)
+  last0_wheel_speed_(0),
+  wheel_base_(1.0),
+  drive_wheel_radius_(0.4),
+  wheel_is_reversed_(false)
 {
 }
 
@@ -131,6 +134,29 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
     return false;
   }
 
+
+  double wheel_rotation;
+  if(!uvk.getRotationBetweenJoints(drive_wheel_name, "base_footprint_joint", wheel_rotation))
+  {
+    return false;
+  }
+
+  ROS_INFO("Wheel rotation is: %f", wheel_rotation);
+  if(fabs(wheel_rotation) < 0.01)
+  {
+    ROS_INFO("Setting wheel direction to not revesed");
+    wheel_is_reversed_ = false;
+  }else if(fabs(wheel_rotation - M_PI) < 0.01)
+  {
+    ROS_INFO("Setting wheel direction to reversed");
+    wheel_is_reversed_ = true;
+  }else
+  {
+    ROS_INFO_STREAM_NAMED(name_,
+                          "Only wheels that are mounted with center forwards "
+                          << "or backwards are supported at this time. Aborting!");
+  }
+
   if(!uvk.getJointRadius(drive_wheel_name, drive_wheel_radius_))
   {
     return false;
@@ -180,6 +206,11 @@ void TricycleController::starting(const ros::Time& time)
 
 void TricycleController::update(const ros::Time& time, const ros::Duration& period)
 {
+  update_movement(time, period);
+}
+
+void TricycleController::update_movement(const ros::Time& time, const ros::Duration& period)
+{
   Commands current_command = *(command_.readFromRT());
   const double dt = (time - current_command.stamp).toSec();
 
@@ -210,13 +241,20 @@ void TricycleController::update(const ros::Time& time, const ros::Duration& peri
   drive_wheel_kinematics_.update();
 
   double desired_steer_angle = drive_wheel_kinematics_.getSteer();
+  double steer_angle_state = drive_wheel_steer_joint_.getPosition();
+
+  //FIXME: do this in wheel_kinematics instaid...
+  if(wheel_is_reversed_)
+  {
+    desired_steer_angle = -desired_steer_angle;
+  }
+
   double filtered_steer_angle = desired_steer_angle;
   limiter_steer_servo_.limit(filtered_steer_angle, last0_steer_angle_, last1_steer_angle_, cmd_dt);
 
   last1_steer_angle_ = last0_steer_angle_;
   last0_steer_angle_ = filtered_steer_angle;
 
-  double steer_angle_state = drive_wheel_steer_joint_.getPosition();
   double desired_angular_velocity = drive_wheel_kinematics_.getAngularVelocity();
 
   // ROS_INFO("desired: %f, state: %f, fabs: %f", desired_steer_angle, steer_angle_state, fabs(steer_angle_state - desired_steer_angle) );
@@ -239,6 +277,12 @@ void TricycleController::update(const ros::Time& time, const ros::Duration& peri
   // Update joints
   drive_wheel_joint_.setCommand(filtered_angular_velocity);
   drive_wheel_steer_joint_.setCommand(filtered_steer_angle);
+
+}
+
+void TricycleController::update_odoemtry(const ros::Time& time, const ros::Duration& period)
+{
+  //TODO: implement
 }
 
 void TricycleController::stopping(const ros::Time&)

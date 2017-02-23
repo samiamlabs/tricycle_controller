@@ -2,7 +2,7 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <pluginlib/class_list_macros.h>
 
-#include <urdf_vehicle_kinematic/urdf_vehicle_kinematic.h>
+#include <tricycle_controller/urdf_vehicle_kinematic.h>
 #include <geometry_msgs/Twist.h>
 #include <tricycle_controller/speed_limiter.h>
 #include <realtime_tools/realtime_buffer.h>
@@ -39,14 +39,15 @@ public:
 
   void stopping(const ros::Time&);
 
+private:
+
+  void update_movement(const ros::Time& time, const ros::Duration& period);
+  void update_odoemtry(const ros::Time& time, const ros::Duration& period);
+
   void cmdVelCallback(const geometry_msgs::TwistConstPtr& cmd_vel_msg);
   void setCmdVel(const geometry_msgs::TwistConstPtr& cmd_vel_msg);
 
-
-
-private:
   std::string name_;
-
 
   // Hardware handles:
   hardware_interface::JointHandle drive_wheel_joint_;
@@ -54,6 +55,7 @@ private:
 
   double wheel_base_;
   double drive_wheel_radius_;
+  bool wheel_is_reversed_;
 
   bool new_cmd_available_;
 

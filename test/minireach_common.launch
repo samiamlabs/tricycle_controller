@@ -12,4 +12,7 @@
         args="minireach_controller
         joint_state_controller --shutdown-timeout 5" />
 
+  <node pkg="rqt_robot_steering" type="rqt_robot_steering" name="rqt_robot_steering"/>
+
+
 </launch>

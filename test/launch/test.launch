@@ -1,6 +1,6 @@
 <launch>
-  <!-- Start gazebo world -->
-  <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+  <!-- Run driver -->
+  <node name="example_driver" pkg="tricycle_controller" type="example_driver_node" output="screen"/>
 
   <!-- load robot -->
   <param name="robot_description"
@@ -9,8 +9,7 @@
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
   <!-- Load controller config -->
-  <rosparam command="load" file="$(find tricycle_controller)/test/config/tricycle_controllers.yaml" />
-  <rosparam command="load" file="$(find tricycle_controller)/test/config/tricycle_limits.yaml" />
+  <rosparam command="load" file="$(find tricycle_controller)/test/config/test.yaml" />
 
   <!-- push robot_description to factory and spawn robot in gazebo -->
   <node name="spawn_tricycle" pkg="gazebo_ros" type="spawn_model"
@@ -19,7 +18,7 @@
   <!-- Spawn controller -->
   <node name="controller_spawner"
         pkg="controller_manager" type="spawner" output="screen"
-        args="joint_state_controller tricycle_controller --shutdown-timeout 3"/>
+        args="joint_state_controller wheel_steer_position_controller wheel_drive_velocity_controller --shutdown-timeout 3"/>
 
   <!--
   <node pkg="joy" type="joy_node" name="joy_node">
