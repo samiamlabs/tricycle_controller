@@ -2,7 +2,7 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <pluginlib/class_list_macros.h>
 
-#include <tricycle_controller/urdf_vehicle_kinematic.h>
+#include <urdf_vehicle_kinematic/urdf_vehicle_kinematic.h>
 #include <geometry_msgs/Twist.h>
 #include <tricycle_controller/speed_limiter.h>
 #include <realtime_tools/realtime_buffer.h>

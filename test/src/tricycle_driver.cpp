@@ -38,11 +38,11 @@ void Tricycle::read()
 {
   //TODO: read from encoder or similar here
 
-  // steer_pos_ = steer_cmd_; // loopback
-  // motor_vel_ = motor_cmd_; // loopback
+  steer_pos_ = steer_cmd_; // loopback
+  motor_vel_ = motor_cmd_; // loopback
 }
 
 void Tricycle::write()
 {
-  // ROS_INFO("Writing steer position: %f, and motor_speed: %f", steer_cmd_, motor_cmd_);
+  ROS_INFO_THROTTLE(0.5,"Writing steer position: %f, and motor_speed: %f", steer_cmd_, motor_cmd_);
 }

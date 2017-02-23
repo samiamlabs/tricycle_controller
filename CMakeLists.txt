@@ -12,7 +12,8 @@ set(${PROJECT_NAME}_CATKIN_DEPS
     controller_interface
     nav_msgs
     realtime_tools
-    tf)
+    tf
+    urdf_vehicle_kinematic)
 
 
 
@@ -28,7 +29,7 @@ include_directories(
   include ${catkin_INCLUDE_DIRS}
 )
 
-add_library(${PROJECT_NAME} src/tricycle_controller.cpp src/speed_limiter.cpp src/wheel_kinematics.cpp src/urdf_vehicle_kinematic.cpp)
+add_library(${PROJECT_NAME} src/tricycle_controller.cpp src/speed_limiter.cpp src/wheel_kinematics.cpp )
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME}
@@ -39,6 +40,10 @@ install(TARGETS ${PROJECT_NAME}
 
 install(FILES tricycle_controller_plugins.xml
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  )
 
 if(CATKIN_ENABLE_TESTING)
   find_package(catkin REQUIRED COMPONENTS roscpp rostest std_srvs controller_manager tf)
