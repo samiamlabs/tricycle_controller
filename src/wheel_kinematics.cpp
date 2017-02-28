@@ -182,26 +182,3 @@ void WheelKinematics::setImprovedServoAngleAndMotorDirection(double unimproved_s
   servo_steer_angle_ = -angles[index_of_closest_angle];
   motor_direction_ = motor_directions[index_of_closest_angle];
 }
-
-// void WheelKinematics::jointStatesCallback(const sensor_msgs::JointState::ConstPtr& joint_state_msg)
-// {
-//   int num_states = joint_state_msg->name.size();
-//   for(int i = 0; i < num_states; i++)
-//   {
-//     if(joint_state_msg->name[i] == "wheel_drive_joint")
-//     {
-//       motor_rotational_velocity_state_ = joint_state_msg->velocity[i];
-//     }
-//     else if(joint_state_msg->name[i] == "wheel_steer_joint")
-//     {
-//       servo_steer_angle_state_ = joint_state_msg->position[i];
-//     }
-//   }
-// }
-
-// void WheelKinematics::dynamicReconfigureCallback(minireach_controllers::base_controllerConfig &config, uint32_t level)
-// {
-//   USE_ANGLE_TOLERANCE = config.use_steer_angle_tolerance;
-//   STEER_ANGLE_TOLERANCE = config.angle_tolerance;
-//   STEER_ANGLE_LIMIT = (M_PI/180)*config.steer_angle_limit; // convert to radians
-// }
