@@ -74,10 +74,10 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
                                     ros::NodeHandle& root_nh,
                                     ros::NodeHandle &controller_nh)
 {
-  ROS_INFO("Running init, wooop di doo");
   const std::string complete_ns = controller_nh.getNamespace();
   std::size_t id = complete_ns.find_last_of("/");
 
+  ROS_INFO("TricycleController namespace: %s", complete_ns.c_str());
 
   std::string drive_wheel_name, drive_wheel_steer_name;
 
