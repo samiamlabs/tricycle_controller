@@ -8,18 +8,12 @@
 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
-  <!-- Load controller config -->
-  <rosparam command="load" file="$(find tricycle_controller)/test/config/tricycle_controllers.yaml" />
-  <rosparam command="load" file="$(find tricycle_controller)/test/config/tricycle_limits.yaml" />
 
   <!-- push robot_description to factory and spawn robot in gazebo -->
   <node name="spawn_tricycle" pkg="gazebo_ros" type="spawn_model"
         args="-urdf -param robot_description -model tricycle -z 0.5" respawn="false" output="screen" />
 
-  <!-- Spawn controller -->
-  <node name="controller_spawner"
-        pkg="controller_manager" type="spawner" output="screen"
-        args="joint_state_controller tricycle_controller --shutdown-timeout 3"/>
+  <include file="$(find tricycle_controller)/test/launch/spawn_controller.launch"/>
 
   <!--
   <node pkg="joy" type="joy_node" name="joy_node">
@@ -29,6 +23,7 @@
   <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_twist_joy">
   </node>
   -->
+
   <node pkg="rqt_robot_steering" type="rqt_robot_steering" name="rqt_robot_steering">
     <remap from="cmd_vel" to="tricycle_controller/command"/>
   </node>

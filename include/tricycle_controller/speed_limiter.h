@@ -126,7 +126,7 @@ namespace tricycle_controller
     double max_jerk;
   };
 
-  class PositionSpeedLimiter
+  class PositionLimiter
   {
   public:
 
@@ -142,16 +142,21 @@ namespace tricycle_controller
      * \param [in] min_jerk Minimum jerk [m/s^3], usually <= 0
      * \param [in] max_jerk Maximum jerk [m/s^3], usually >= 0
      */
-    PositionSpeedLimiter(
+    PositionLimiter(
+      bool has_position_limits = true,
       bool has_velocity_limits = false,
       bool has_acceleration_limits = false,
       bool has_jerk_limits = false,
+      double min_position = 0.0,
+      double max_position = 0.0,
       double min_velocity = 0.0,
       double max_velocity = 0.0,
       double min_acceleration = 0.0,
       double max_acceleration = 0.0,
       double min_jerk = 0.0,
-      double max_jerk = 0.0
+      double max_jerk = 0.0,
+      double oscillation_damper_constant = 0.0,
+      double min_damper_vel = 0.0
     );
 
     /**
@@ -162,40 +167,30 @@ namespace tricycle_controller
      * \param [in]      dt Time step [s]
      * \return Limiting factor (1.0 if none)
      */
-    double limit(double& v, double v0, double v1, double dt);
+    double limit(double& v, double dt);
 
-    /**
-     * \brief Limit the velocity
-     * \param [in, out] v Velocity [m/s]
-     * \return Limiting factor (1.0 if none)
-     */
-    double limit_velocity(double& v);
+  private:
 
-    /**
-     * \brief Limit the acceleration
-     * \param [in, out] v  Velocity [m/s]
-     * \param [in]      v0 Previous velocity [m/s]
-     * \param [in]      dt Time step [s]
-     * \return Limiting factor (1.0 if none)
-     */
-    double limit_acceleration(double& v, double v0, double dt);
+    void limit_position();
+    void limit_velocity();
+    void limit_acceleration();
+    void limit_jerk();
 
-    /**
-     * \brief Limit the jerk
-     * \param [in, out] v  Velocity [m/s]
-     * \param [in]      v0 Previous velocity to v  [m/s]
-     * \param [in]      v1 Previous velocity to v0 [m/s]
-     * \param [in]      dt Time step [s]
-     * \return Limiting factor (1.0 if none)
-     * \see http://en.wikipedia.org/wiki/Jerk_%28physics%29#Motion_control
-     */
-    double limit_jerk(double& v, double v0, double v1, double dt);
+    void oscillation_damper();
+
+    void update_state(double position, double dt);
+    void update_last_state();
 
   public:
     // Enable/Disable velocity/acceleration/jerk limits:
+    bool has_position_limits;
     bool has_velocity_limits;
     bool has_acceleration_limits;
     bool has_jerk_limits;
+
+    // Position limits:
+    double min_position;
+    double max_position;
 
     // Velocity limits:
     double min_velocity;
@@ -209,11 +204,16 @@ namespace tricycle_controller
     double min_jerk;
     double max_jerk;
 
+    // Oscillation damper
+    double oscillation_damper_constant;
+    double min_damper_vel;
+
   private:
-    double current_position_;
-    double current_velocity_;
-    double current_acceleration_;
-    double current_jerk_;
+    double dt_;
+    double last_position_, current_position_, target_position_;
+    double last_velocity_, current_velocity_;
+    double last_acceleration_, current_acceleration_;
+    double last_jerk_, current_jerk_;
   };
 
 } // namespace tricycle_controller

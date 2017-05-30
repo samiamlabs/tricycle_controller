@@ -105,15 +105,21 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
   controller_nh.param("angular/z/max_jerk"               , limiter_angular_.max_jerk               ,  limiter_angular_.max_jerk              );
   controller_nh.param("angular/z/min_jerk"               , limiter_angular_.min_jerk               , -limiter_angular_.max_jerk              );
 
-  controller_nh.param("steer_servo/has_position_limits"    , limiter_steer_servo_.has_velocity_limits    , limiter_steer_servo_.has_velocity_limits    );
-  controller_nh.param("steer_servo/has_velocity_limits", limiter_steer_servo_.has_acceleration_limits, limiter_steer_servo_.has_acceleration_limits);
-  controller_nh.param("steer_servo/has_acceleration_limits"        , limiter_steer_servo_.has_jerk_limits        , limiter_steer_servo_.has_jerk_limits        );
-  controller_nh.param("steer_servo/max_position"           , limiter_steer_servo_.max_velocity           ,  limiter_steer_servo_.max_velocity          );
-  controller_nh.param("steer_servo/min_position"           , limiter_steer_servo_.min_velocity           , -limiter_steer_servo_.max_velocity          );
-  controller_nh.param("steer_servo/max_velocity"       , limiter_steer_servo_.max_acceleration       ,  limiter_steer_servo_.max_acceleration      );
-  controller_nh.param("steer_servo/min_velocity"       , limiter_steer_servo_.min_acceleration       , -limiter_steer_servo_.max_acceleration      );
-  controller_nh.param("steer_servo/max_acceleration"               , limiter_steer_servo_.max_jerk               ,  limiter_steer_servo_.max_jerk              );
-  controller_nh.param("steer_servo/min_acceleration"               , limiter_steer_servo_.min_jerk               , -limiter_steer_servo_.max_jerk              );
+  controller_nh.param("steer_servo/has_position_limits"     , limiter_steer_servo_.has_position_limits      , limiter_steer_servo_.has_position_limits      );
+  controller_nh.param("steer_servo/has_velocity_limits"     , limiter_steer_servo_.has_velocity_limits      , limiter_steer_servo_.has_velocity_limits      );
+  controller_nh.param("steer_servo/has_acceleration_limits" , limiter_steer_servo_.has_acceleration_limits  , limiter_steer_servo_.has_acceleration_limits  );
+  controller_nh.param("steer_servo/has_jerk_limits"         , limiter_steer_servo_.has_jerk_limits          , limiter_steer_servo_.has_jerk_limits          );
+  controller_nh.param("steer_servo/max_position"            , limiter_steer_servo_.max_position             ,  limiter_steer_servo_.max_position            );
+  controller_nh.param("steer_servo/min_position"            , limiter_steer_servo_.min_position             , -limiter_steer_servo_.max_position            );
+  controller_nh.param("steer_servo/max_velocity"            , limiter_steer_servo_.max_velocity             ,  limiter_steer_servo_.max_velocity            );
+  controller_nh.param("steer_servo/min_velocity"            , limiter_steer_servo_.min_velocity             , -limiter_steer_servo_.max_velocity            );
+  controller_nh.param("steer_servo/max_acceleration"        , limiter_steer_servo_.max_acceleration         ,  limiter_steer_servo_.max_acceleration        );
+  controller_nh.param("steer_servo/min_acceleration"        , limiter_steer_servo_.min_acceleration         , -limiter_steer_servo_.max_acceleration        );
+  controller_nh.param("steer_servo/max_jerk"                , limiter_steer_servo_.max_jerk                 ,  limiter_steer_servo_.max_jerk                );
+  controller_nh.param("steer_servo/min_jerk"                , limiter_steer_servo_.min_jerk                 , -limiter_steer_servo_.max_jerk                );
+
+  controller_nh.param("steer_servo/oscillation_damper_constant", limiter_steer_servo_.oscillation_damper_constant, limiter_steer_servo_.oscillation_damper_constant);
+  controller_nh.param("steer_servo/min_damper_vel", limiter_steer_servo_.min_damper_vel, limiter_steer_servo_.min_damper_vel);
 
   controller_nh.param("wheel_motor/has_velocity_limits"    , limiter_wheel_motor_.has_velocity_limits    , limiter_wheel_motor_.has_velocity_limits    );
   controller_nh.param("wheel_motor/has_acceleration_limits", limiter_wheel_motor_.has_acceleration_limits, limiter_wheel_motor_.has_acceleration_limits);
@@ -250,7 +256,7 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
   }
 
   double filtered_steer_angle = desired_steer_angle;
-  limiter_steer_servo_.limit(filtered_steer_angle, last0_steer_angle_, last1_steer_angle_, cmd_dt);
+  limiter_steer_servo_.limit(filtered_steer_angle, cmd_dt);
 
   last1_steer_angle_ = last0_steer_angle_;
   last0_steer_angle_ = filtered_steer_angle;

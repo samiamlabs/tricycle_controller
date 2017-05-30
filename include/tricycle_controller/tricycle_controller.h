@@ -79,7 +79,7 @@ private:
   Commands last1_cmd_;
   Commands last0_cmd_;
 
-  PositionSpeedLimiter limiter_steer_servo_;
+  PositionLimiter limiter_steer_servo_;
   double last1_steer_angle_;
   double last0_steer_angle_;
 
