@@ -13,7 +13,8 @@ TricycleController::TricycleController()
   last0_wheel_speed_(0),
   wheel_base_(1.0),
   drive_wheel_radius_(0.4),
-  wheel_is_reversed_(false)
+  wheel_is_reversed_(false),
+  angle_tolerance_(0.3)
 {
 }
 
@@ -120,6 +121,7 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
 
   controller_nh.param("steer_servo/oscillation_damper_constant", limiter_steer_servo_.oscillation_damper_constant, limiter_steer_servo_.oscillation_damper_constant);
   controller_nh.param("steer_servo/min_damper_vel", limiter_steer_servo_.min_damper_vel, limiter_steer_servo_.min_damper_vel);
+  controller_nh.param("steer_servo/angle_tolerance", angle_tolerance_, angle_tolerance_);
 
   controller_nh.param("wheel_motor/has_velocity_limits"    , limiter_wheel_motor_.has_velocity_limits    , limiter_wheel_motor_.has_velocity_limits    );
   controller_nh.param("wheel_motor/has_acceleration_limits", limiter_wheel_motor_.has_acceleration_limits, limiter_wheel_motor_.has_acceleration_limits);
@@ -264,7 +266,7 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
   double desired_angular_velocity = drive_wheel_kinematics_.getAngularVelocity();
 
   // ROS_INFO("desired: %f, state: %f, fabs: %f", desired_steer_angle, steer_angle_state, fabs(steer_angle_state - desired_steer_angle) );
-  if(fabs(steer_angle_state - desired_steer_angle) > 0.3)
+  if(fabs(steer_angle_state - desired_steer_angle) > angle_tolerance_)
   {
     desired_angular_velocity = 0;
   }

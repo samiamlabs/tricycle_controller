@@ -28,6 +28,7 @@ tricycle_controller:
       max_jerk: 100000
       oscillation_damper_constant: 10
       min_damper_vel: 0.0001
+      angle_tolerance: 0.3
   wheel_motor:
       has_velocity_limits: true
       max_angular_velocity: 2.0

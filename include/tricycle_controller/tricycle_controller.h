@@ -61,6 +61,8 @@ private:
 
   WheelKinematics drive_wheel_kinematics_;
 
+  double angle_tolerance_;
+
   struct Commands
   {
     double linear;
