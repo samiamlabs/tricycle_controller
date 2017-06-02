@@ -39,8 +39,6 @@
 #include <algorithm>
 
 #include <tricycle_controller/speed_limiter.h>
-//FIXME: remove following include
-#include <ros/ros.h>
 
 template<typename T>
 T clamp(T x, T min, T max)
@@ -182,8 +180,6 @@ namespace tricycle_controller
 
     update_last_state();
 
-    ROS_INFO_THROTTLE(1, "Limiter: Position: %f, Velocity: %f, Acceleration: %f, Jerk: %f", current_position_, current_velocity_, current_acceleration_, current_jerk_);
-
     position = current_position_;
 
     return 1.0;  // tmp != 0.0 ? v / tmp : 1.0;
@@ -230,7 +226,6 @@ namespace tricycle_controller
   {
     if (has_jerk_limits)
     {
-      ROS_INFO_THROTTLE(1, "Position: %f, Velocity: %f, Acceleration: %f, Jerk: %f", current_position_, current_velocity_, current_acceleration_, current_jerk_);
       current_jerk_ = clamp(current_jerk_, min_jerk, max_jerk);
       current_acceleration_ = last_acceleration_ + current_jerk_*dt_;
       current_velocity_ = last_velocity_ + current_acceleration_*dt_;
@@ -242,7 +237,6 @@ namespace tricycle_controller
   {
     double oscillation_damped_velocity = min_damper_vel + pow(fabs(oscillation_damper_constant*(target_position_-current_position_)*current_velocity_), 2);
     current_velocity_ = clamp(current_velocity_, -oscillation_damped_velocity, oscillation_damped_velocity);
-    ROS_INFO_THROTTLE(1, "Damped velocity: %f", current_velocity_);
   }
 
   void PositionLimiter::update_last_state()
