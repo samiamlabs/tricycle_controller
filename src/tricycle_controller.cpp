@@ -31,7 +31,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
- 
+
 #include <tricycle_controller/tricycle_controller.h>
 
 namespace tricycle_controller
@@ -48,7 +48,9 @@ TricycleController::TricycleController()
   wheel_base_(1.0),
   drive_wheel_radius_(0.4),
   wheel_is_reversed_(false),
-  angle_tolerance_(0.3)
+  angle_tolerance_(0.3),
+  drive_wheel_stop_vel_(0.05),
+  drive_wheel_min_vel_(0.35)
 {
 }
 
@@ -314,9 +316,28 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
   last1_wheel_speed_ = last0_wheel_speed_;
   last0_wheel_speed_ = filtered_angular_velocity;
 
-  // ROS_INFO("Applied wheel speed: %f", filtered_angular_velocity);
+  ROS_INFO("Applied wheel speed: %f", filtered_angular_velocity);
   // ROS_INFO("Applied steer angle: %f, desired: %f", filtered_steer_angle, desired_steer_angle);
   // Update joints
+
+  // Prevent platform from stopping because wheel speed is to low
+  if(fabs(filtered_angular_velocity) < drive_wheel_stop_vel_)
+  {
+    filtered_angular_velocity = 0.0;
+  } else
+  {
+    if(fabs(filtered_angular_velocity) < drive_wheel_min_vel_)
+    {
+      if(filtered_angular_velocity > 0)
+      {
+        filtered_angular_velocity = drive_wheel_min_vel_;
+      } else
+      {
+        filtered_angular_velocity = -drive_wheel_min_vel_;
+      }
+    }
+  }
+
   drive_wheel_joint_.setCommand(filtered_angular_velocity);
   drive_wheel_steer_joint_.setCommand(filtered_steer_angle);
 

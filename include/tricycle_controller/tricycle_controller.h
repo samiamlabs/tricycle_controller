@@ -62,6 +62,7 @@ private:
   WheelKinematics drive_wheel_kinematics_;
 
   double angle_tolerance_;
+  double drive_wheel_stop_vel_, drive_wheel_min_vel_;
 
   struct Commands
   {
