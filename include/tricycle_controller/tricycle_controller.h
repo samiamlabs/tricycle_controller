@@ -49,6 +49,8 @@ private:
 
   std::string name_;
 
+  ros::Publisher tricycle_pub;
+
   // Hardware handles:
   hardware_interface::JointHandle drive_wheel_joint_;
   hardware_interface::JointHandle drive_wheel_steer_joint_;

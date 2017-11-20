@@ -33,6 +33,10 @@
  *********************************************************************/
 
 #include <tricycle_controller/tricycle_controller.h>
+#include "std_msgs/Float64.h"
+#include "std_msgs/Float64MultiArray.h"
+#include "std_msgs/MultiArrayLayout.h"
+#include "std_msgs/MultiArrayDimension.h"
 
 namespace tricycle_controller
 {
@@ -52,6 +56,8 @@ TricycleController::TricycleController()
   drive_wheel_stop_vel_(0.05),
   drive_wheel_min_vel_(0.35)
 {
+
+
 }
 
 
@@ -60,6 +66,7 @@ bool TricycleController::initRequest(hardware_interface::RobotHW *const robot_hw
                                                   ros::NodeHandle &controller_nh,
                                                   std::set<std::string>& claimed_resources)
 {
+
   ROS_INFO("Running initRequest woooop");
   if(state_ != CONSTRUCTED)
   {
@@ -111,6 +118,8 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
                                     ros::NodeHandle& root_nh,
                                     ros::NodeHandle &controller_nh)
 {
+  tricycle_pub = controller_nh.advertise<std_msgs::Float64MultiArray>("desired_steer_angle", 1000, true);
+
   const std::string complete_ns = controller_nh.getNamespace();
   std::size_t id = complete_ns.find_last_of("/");
 
@@ -255,6 +264,7 @@ void TricycleController::update(const ros::Time& time, const ros::Duration& peri
 
 void TricycleController::update_movement(const ros::Time& time, const ros::Duration& period)
 {
+
   Commands current_command = *(command_.readFromRT());
   const double dt = (time - current_command.stamp).toSec();
 
@@ -316,8 +326,8 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
   last1_wheel_speed_ = last0_wheel_speed_;
   last0_wheel_speed_ = filtered_angular_velocity;
 
-  ROS_INFO("Applied wheel speed: %f", filtered_angular_velocity);
-  // ROS_INFO("Applied steer angle: %f, desired: %f", filtered_steer_angle, desired_steer_angle);
+  //ROS_INFO("Applied wheel speed: %f", filtered_angular_velocity);
+  //ROS_INFO("Applied steer angle: %f, desired: %f", filtered_steer_angle, desired_steer_angle);
   // Update joints
 
   // Prevent platform from stopping because wheel speed is to low
@@ -337,9 +347,29 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
       }
     }
   }
+  //ROS_INFO("Applied steer angle: %f", filtered_steer_angle);
 
   drive_wheel_joint_.setCommand(filtered_angular_velocity);
   drive_wheel_steer_joint_.setCommand(filtered_steer_angle);
+
+   std_msgs::Float64MultiArray msg;
+   double nsecs = ros::Time::now().toNSec();
+   /*std_msgs::MultiArrayLayout layout;
+   std_msgs::MultiArrayDimension dim [1] = { };
+   dim[0].label = "test";
+   dim[0].size = 3;
+   dim[0].stride = 3;
+   layout.dim = dim;
+   layout.data_offset = 0;*/
+   msg.data.clear();
+   msg.data.push_back(nsecs);
+   msg.data.push_back(filtered_steer_angle);
+   //msg.layout = layout;
+   //Float64 data [3];
+   //msg.data = data;
+   //msg.data = filtered_steer_angle;
+   tricycle_pub.publish(msg);
+   //ROS_INFO("Applied steer angle: %f", filtered_steer_angle);
 
 }
 
