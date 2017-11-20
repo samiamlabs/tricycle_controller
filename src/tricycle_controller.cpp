@@ -118,6 +118,7 @@ bool TricycleController::init( hardware_interface::PositionJointInterface* hw_po
                                     ros::NodeHandle& root_nh,
                                     ros::NodeHandle &controller_nh)
 {
+  // Initialise steer angle publisher
   tricycle_pub = controller_nh.advertise<std_msgs::Float64MultiArray>("desired_steer_angle", 1000, true);
 
   const std::string complete_ns = controller_nh.getNamespace();
@@ -352,25 +353,17 @@ void TricycleController::update_movement(const ros::Time& time, const ros::Durat
   drive_wheel_joint_.setCommand(filtered_angular_velocity);
   drive_wheel_steer_joint_.setCommand(filtered_steer_angle);
 
-   std_msgs::Float64MultiArray msg;
-   double nsecs = ros::Time::now().toNSec();
-   /*std_msgs::MultiArrayLayout layout;
-   std_msgs::MultiArrayDimension dim [1] = { };
-   dim[0].label = "test";
-   dim[0].size = 3;
-   dim[0].stride = 3;
-   layout.dim = dim;
-   layout.data_offset = 0;*/
-   msg.data.clear();
-   msg.data.push_back(nsecs);
-   msg.data.push_back(filtered_steer_angle);
-   //msg.layout = layout;
-   //Float64 data [3];
-   //msg.data = data;
-   //msg.data = filtered_steer_angle;
-   tricycle_pub.publish(msg);
-   //ROS_INFO("Applied steer angle: %f", filtered_steer_angle);
-
+  /*
+  * Publish desired steer angle on /base_controller/desired_steer_angle topic
+  * Published data will be a Float64 array on the form: 
+  * [timestamp_nanosecs desired_steer_angle]
+  */
+  std_msgs::Float64MultiArray msg;
+  double nsecs = ros::Time::now().toNSec();
+  msg.data.clear();
+  msg.data.push_back(nsecs);
+  msg.data.push_back(filtered_steer_angle);
+  tricycle_pub.publish(msg);
 }
 
 void TricycleController::update_odoemtry(const ros::Time& time, const ros::Duration& period)
