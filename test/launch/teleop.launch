@@ -1,0 +1,12 @@
+<launch>
+  <include file="$(find tricycle_controller)/test/launch/tricycle_common.launch"/>
+
+  <!-- Joy teleop -->
+  <arg name="type" default="$(env DYNO_JOY_TYPE)"/>
+  <node name="joy_node" pkg="joy" type="joy_node"/>
+  <node name="joy_teleop" pkg="dyno_teleop" type="joy_teleop">
+      <param name="type" value="$(arg type)"/>
+      <remap from="cmd_vel" to="tricycle_controller/cmd_vel" />
+  </node>
+  
+</launch>

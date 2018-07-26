@@ -1,379 +1,395 @@
-/*********************************************************************
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2017, Toyota Material Handling Sweden
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of the copyright holder nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *********************************************************************/
+// License: BSD
+// https://raw.githubusercontent.com/samiamlabs/dyno/master/LICENCE
+
+#include <cmath>
+
+#include <tf/transform_datatypes.h>
+
+#include <boost/assign.hpp>
 
 #include <tricycle_controller/tricycle_controller.h>
-#include "std_msgs/Float64.h"
-#include "std_msgs/Float64MultiArray.h"
-#include "std_msgs/MultiArrayLayout.h"
-#include "std_msgs/MultiArrayDimension.h"
+#include <urdf_geometry_parser/urdf_geometry_parser.h>
 
-namespace tricycle_controller
-{
+
+namespace tricycle_controller {
 
 TricycleController::TricycleController()
-  :
-  cmd_vel_timeout_(0.5),
-  command_struct_(),
-  last1_steer_angle_(0),
-  last0_steer_angle_(0),
-  last1_wheel_speed_(0),
-  last0_wheel_speed_(0),
-  wheel_base_(1.0),
-  drive_wheel_radius_(0.4),
-  wheel_is_reversed_(false),
-  angle_tolerance_(0.3),
-  drive_wheel_stop_vel_(0.05),
-  drive_wheel_min_vel_(0.35)
-{
+    : command_struct_(), wheel_radius_(0.0), wheel_base_(0.0),
+      cmd_vel_timeout_(0.5), base_frame_id_("base_footprint"),
+      odom_frame_id_("odom"), enable_odom_tf_(true), angle_tolerance_(0.2) {}
 
-
-}
-
-
-bool TricycleController::initRequest(hardware_interface::RobotHW *const robot_hw,
-                                                  ros::NodeHandle& root_nh,
-                                                  ros::NodeHandle &controller_nh,
-                                                  std::set<std::string>& claimed_resources)
-{
-
-  ROS_INFO("Running initRequest woooop");
-  if(state_ != CONSTRUCTED)
-  {
-    ROS_ERROR("The tricycle drive controller could not be created.");
-    return false;
-  }
-
-  hardware_interface::PositionJointInterface *const pos_joint_hw = robot_hw->get<hardware_interface::PositionJointInterface>();
-  hardware_interface::VelocityJointInterface *const vel_joint_hw = robot_hw->get<hardware_interface::VelocityJointInterface>();
-
-  if(pos_joint_hw == NULL)
-  {
-      ROS_ERROR("This controller requires a hardware interface of type '%s'."
-                " Make sure this is registered in the hardware_interface::RobotHW class.",
-                hardware_interface::internal::demangledTypeName<hardware_interface::PositionJointInterface>().c_str());
-      return false;
-  }else if(vel_joint_hw == NULL)
-  {
-      ROS_ERROR("This controller requires a hardware interface of type '%s'."
-                " Make sure this is registered in the hardware_interface::RobotHW class.",
-                hardware_interface::internal::demangledTypeName<hardware_interface::PositionJointInterface>().c_str());
-      return false;
-  }
-
-  pos_joint_hw->clearClaims();
-  vel_joint_hw->clearClaims();
-  if(init(pos_joint_hw, vel_joint_hw, root_nh, controller_nh) == false)
-  {
-    ROS_ERROR("Failed to initialize the controller");
-    return false;
-  }
-
-  claimed_resources.clear();
-
-  const std::set<std::string> claims_pos = pos_joint_hw->getClaims();
-  claimed_resources.insert(claims_pos.begin(), claims_pos.end());
-  pos_joint_hw->clearClaims();
-
-  const std::set<std::string> claims_vel = vel_joint_hw->getClaims();
-  claimed_resources.insert(claims_vel.begin(), claims_vel.end());
-  vel_joint_hw->clearClaims();
-
-  state_ = INITIALIZED;
-  return true;
-}
-
-bool TricycleController::init( hardware_interface::PositionJointInterface* hw_pos,
-                                    hardware_interface::VelocityJointInterface *hw_vel,
-                                    ros::NodeHandle& root_nh,
-                                    ros::NodeHandle &controller_nh)
-{
-  // Initialise steer angle publisher
-  tricycle_pub = controller_nh.advertise<std_msgs::Float64MultiArray>("desired_steer_angle", 1000, true);
-
+bool TricycleController::init(hardware_interface::RobotHW *robot_hw,
+                              ros::NodeHandle &root_nh,
+                              ros::NodeHandle &controller_nh) {
   const std::string complete_ns = controller_nh.getNamespace();
   std::size_t id = complete_ns.find_last_of("/");
+  name_ = complete_ns.substr(id + 1);
 
-  ROS_INFO("TricycleController namespace: %s", complete_ns.c_str());
+  // Get joint name from the parameter server
+  std::string drive_wheel_joint_name, steer_joint_name;
 
-  std::string drive_wheel_name, drive_wheel_steer_name;
+  if (!getJointName(controller_nh, "drive_wheel_joint",
+                    drive_wheel_joint_name) ||
+      !getJointName(controller_nh, "steer_joint", steer_joint_name)) {
+    ROS_ERROR_STREAM("Get joint names from param failed");
+    return false;
+  }
 
-  controller_nh.param<std::string>("drive_wheel", drive_wheel_name, "drive_wheel_joint");
-  controller_nh.param<std::string>("drive_wheel_steer", drive_wheel_steer_name, "drive_wheel_steer_joint");
+  // Odometry related:
+  double publish_rate;
+  controller_nh.param("publish_rate", publish_rate, 50.0);
+  ROS_INFO_STREAM_NAMED(name_, "Controller state will be published at "
+                                   << publish_rate << "Hz.");
+  publish_period_ = ros::Duration(1.0 / publish_rate);
+
+  controller_nh.param("open_loop", open_loop_, open_loop_);
+
+  int velocity_rolling_window_size = 10;
+  controller_nh.param("velocity_rolling_window_size",
+                      velocity_rolling_window_size,
+                      velocity_rolling_window_size);
+  ROS_INFO_STREAM_NAMED(name_, "Velocity rolling window size of "
+                                   << velocity_rolling_window_size << ".");
+
+  odometry_.setVelocityRollingWindowSize(velocity_rolling_window_size);
+
+  // Twist command related:
+  controller_nh.param("cmd_vel_timeout", cmd_vel_timeout_, cmd_vel_timeout_);
+  ROS_INFO_STREAM_NAMED(
+      name_, "Velocity commands will be considered old if they are older than "
+                 << cmd_vel_timeout_ << "s.");
+
+  controller_nh.param("base_frame_id", base_frame_id_, base_frame_id_);
+  ROS_INFO_STREAM_NAMED(name_, "Base frame_id set to " << base_frame_id_);
+
+  controller_nh.param("enable_odom_tf", enable_odom_tf_, enable_odom_tf_);
+  ROS_INFO_STREAM_NAMED(name_,
+                        "Publishing to tf is "
+                            << (enable_odom_tf_ ? "enabled" : "disabled"));
 
   // Velocity and acceleration limits:
-  controller_nh.param("linear/x/has_velocity_limits"    , limiter_linear_.has_velocity_limits    , limiter_linear_.has_velocity_limits    );
-  controller_nh.param("linear/x/has_acceleration_limits", limiter_linear_.has_acceleration_limits, limiter_linear_.has_acceleration_limits);
-  controller_nh.param("linear/x/has_jerk_limits"        , limiter_linear_.has_jerk_limits        , limiter_linear_.has_jerk_limits        );
-  controller_nh.param("linear/x/max_velocity"           , limiter_linear_.max_velocity           ,  limiter_linear_.max_velocity          );
-  controller_nh.param("linear/x/min_velocity"           , limiter_linear_.min_velocity           , -limiter_linear_.max_velocity          );
-  controller_nh.param("linear/x/max_acceleration"       , limiter_linear_.max_acceleration       ,  limiter_linear_.max_acceleration      );
-  controller_nh.param("linear/x/min_acceleration"       , limiter_linear_.min_acceleration       , -limiter_linear_.max_acceleration      );
-  controller_nh.param("linear/x/max_jerk"               , limiter_linear_.max_jerk               ,  limiter_linear_.max_jerk              );
-  controller_nh.param("linear/x/min_jerk"               , limiter_linear_.min_jerk               , -limiter_linear_.max_jerk              );
+  controller_nh.param("linear/x/has_velocity_limits",
+                      limiter_lin_.has_velocity_limits,
+                      limiter_lin_.has_velocity_limits);
+  controller_nh.param("linear/x/has_acceleration_limits",
+                      limiter_lin_.has_acceleration_limits,
+                      limiter_lin_.has_acceleration_limits);
+  controller_nh.param("linear/x/max_velocity", limiter_lin_.max_velocity,
+                      limiter_lin_.max_velocity);
+  controller_nh.param("linear/x/min_velocity", limiter_lin_.min_velocity,
+                      -limiter_lin_.max_velocity);
+  controller_nh.param("linear/x/max_acceleration",
+                      limiter_lin_.max_acceleration,
+                      limiter_lin_.max_acceleration);
+  controller_nh.param("linear/x/min_acceleration",
+                      limiter_lin_.min_acceleration,
+                      -limiter_lin_.max_acceleration);
 
-  controller_nh.param("angular/z/has_velocity_limits"    , limiter_angular_.has_velocity_limits    , limiter_angular_.has_velocity_limits    );
-  controller_nh.param("angular/z/has_acceleration_limits", limiter_angular_.has_acceleration_limits, limiter_angular_.has_acceleration_limits);
-  controller_nh.param("angular/z/has_jerk_limits"        , limiter_angular_.has_jerk_limits        , limiter_angular_.has_jerk_limits        );
-  controller_nh.param("angular/z/max_velocity"           , limiter_angular_.max_velocity           ,  limiter_angular_.max_velocity          );
-  controller_nh.param("angular/z/min_velocity"           , limiter_angular_.min_velocity           , -limiter_angular_.max_velocity          );
-  controller_nh.param("angular/z/max_acceleration"       , limiter_angular_.max_acceleration       ,  limiter_angular_.max_acceleration      );
-  controller_nh.param("angular/z/min_acceleration"       , limiter_angular_.min_acceleration       , -limiter_angular_.max_acceleration      );
-  controller_nh.param("angular/z/max_jerk"               , limiter_angular_.max_jerk               ,  limiter_angular_.max_jerk              );
-  controller_nh.param("angular/z/min_jerk"               , limiter_angular_.min_jerk               , -limiter_angular_.max_jerk              );
+  controller_nh.param("angular/z/has_velocity_limits",
+                      limiter_ang_.has_velocity_limits,
+                      limiter_ang_.has_velocity_limits);
+  controller_nh.param("angular/z/has_acceleration_limits",
+                      limiter_ang_.has_acceleration_limits,
+                      limiter_ang_.has_acceleration_limits);
+  controller_nh.param("angular/z/max_velocity", limiter_ang_.max_velocity,
+                      limiter_ang_.max_velocity);
+  controller_nh.param("angular/z/min_velocity", limiter_ang_.min_velocity,
+                      -limiter_ang_.max_velocity);
+  controller_nh.param("angular/z/max_acceleration",
+                      limiter_ang_.max_acceleration,
+                      limiter_ang_.max_acceleration);
+  controller_nh.param("angular/z/min_acceleration",
+                      limiter_ang_.min_acceleration,
+                      -limiter_ang_.max_acceleration);
 
-  controller_nh.param("steer_servo/has_position_limits"     , limiter_steer_servo_.has_position_limits      , limiter_steer_servo_.has_position_limits      );
-  controller_nh.param("steer_servo/has_velocity_limits"     , limiter_steer_servo_.has_velocity_limits      , limiter_steer_servo_.has_velocity_limits      );
-  controller_nh.param("steer_servo/has_acceleration_limits" , limiter_steer_servo_.has_acceleration_limits  , limiter_steer_servo_.has_acceleration_limits  );
-  controller_nh.param("steer_servo/has_jerk_limits"         , limiter_steer_servo_.has_jerk_limits          , limiter_steer_servo_.has_jerk_limits          );
-  controller_nh.param("steer_servo/max_position"            , limiter_steer_servo_.max_position             ,  limiter_steer_servo_.max_position            );
-  controller_nh.param("steer_servo/min_position"            , limiter_steer_servo_.min_position             , -limiter_steer_servo_.max_position            );
-  controller_nh.param("steer_servo/max_velocity"            , limiter_steer_servo_.max_velocity             ,  limiter_steer_servo_.max_velocity            );
-  controller_nh.param("steer_servo/min_velocity"            , limiter_steer_servo_.min_velocity             , -limiter_steer_servo_.max_velocity            );
-  controller_nh.param("steer_servo/max_acceleration"        , limiter_steer_servo_.max_acceleration         ,  limiter_steer_servo_.max_acceleration        );
-  controller_nh.param("steer_servo/min_acceleration"        , limiter_steer_servo_.min_acceleration         , -limiter_steer_servo_.max_acceleration        );
-  controller_nh.param("steer_servo/max_jerk"                , limiter_steer_servo_.max_jerk                 ,  limiter_steer_servo_.max_jerk                );
-  controller_nh.param("steer_servo/min_jerk"                , limiter_steer_servo_.min_jerk                 , -limiter_steer_servo_.max_jerk                );
+  // If either parameter is not available, we need to look up the value in the
+  // URDF
+  bool lookup_wheel_radius =
+      !controller_nh.getParam("wheel_radius", wheel_radius_);
+  bool lookup_wheel_base = !controller_nh.getParam("wheel_base", wheel_base_);
 
-  controller_nh.param("steer_servo/oscillation_damper_constant", limiter_steer_servo_.oscillation_damper_constant, limiter_steer_servo_.oscillation_damper_constant);
-  controller_nh.param("steer_servo/min_damper_vel", limiter_steer_servo_.min_damper_vel, limiter_steer_servo_.min_damper_vel);
-  controller_nh.param("steer_servo/angle_tolerance", angle_tolerance_, angle_tolerance_);
+  urdf_geometry_parser::UrdfGeometryParser uvk(root_nh, base_frame_id_);
 
-  controller_nh.param("wheel_motor/has_velocity_limits"    , limiter_wheel_motor_.has_velocity_limits    , limiter_wheel_motor_.has_velocity_limits    );
-  controller_nh.param("wheel_motor/has_acceleration_limits", limiter_wheel_motor_.has_acceleration_limits, limiter_wheel_motor_.has_acceleration_limits);
-  controller_nh.param("wheel_motor/has_jerk_limits"        , limiter_wheel_motor_.has_jerk_limits        , limiter_wheel_motor_.has_jerk_limits        );
-  controller_nh.param("wheel_motor/max_angular_velocity"           , limiter_wheel_motor_.max_velocity           ,  limiter_wheel_motor_.max_velocity          );
-  controller_nh.param("wheel_motor/min_angular_velocity"           , limiter_wheel_motor_.min_velocity           , -limiter_wheel_motor_.max_velocity          );
-  controller_nh.param("wheel_motor/max_angular_acceleration"       , limiter_wheel_motor_.max_acceleration       ,  limiter_wheel_motor_.max_acceleration      );
-  controller_nh.param("wheel_motor/min_angular_acceleration"       , limiter_wheel_motor_.min_acceleration       , -limiter_wheel_motor_.max_acceleration      );
-  controller_nh.param("wheel_motor/max_jerk"               , limiter_wheel_motor_.max_jerk               ,  limiter_wheel_motor_.max_jerk              );
-  controller_nh.param("wheel_motor/min_jerk"               , limiter_wheel_motor_.min_jerk               , -limiter_wheel_motor_.max_jerk              );
+  if (lookup_wheel_radius)
+    if (!uvk.getJointRadius(drive_wheel_joint_name, wheel_radius_)) {
+      ROS_ERROR_STREAM("Failed to get wheel radius, aborting.");
+      return false;
+    } else
+      controller_nh.setParam("wheel_radius", wheel_radius_);
 
-  ROS_INFO("max_trans_vel: %f, max_trans_rot: %f, max_acc_trans: %f, max_acc_rot: %f", limiter_linear_.max_velocity, limiter_angular_.max_velocity, limiter_linear_.max_acceleration, limiter_angular_.max_acceleration);
-  ROS_INFO("Steer servo limits: vel: %f, acc: %f, jerk: %f", limiter_steer_servo_.max_velocity, limiter_steer_servo_.max_acceleration, limiter_steer_servo_.max_jerk);
+  if (lookup_wheel_base)
+    // Does not take z into account
+    // TODO: make more general, use getTransformVector maybe?
+    if (!uvk.getDistanceBetweenJoints("base_footprint_joint", steer_joint_name,
+                                      wheel_base_)) {
+      ROS_ERROR_STREAM("Failed to get position of steer joint, aborting.");
+      return false;
+    } else
+      controller_nh.setParam("wheel_base", wheel_base_);
 
-  urdf_vehicle_kinematic::UrdfVehicleKinematic uvk(root_nh, "base_footprint");
-  if(!uvk.getDistanceBetweenJointsX(drive_wheel_name, "base_footprint_joint", wheel_base_))
-  {
-    return false;
-  }
+  // Regardless of how we got the separation and radius, use them
+  // to set the odometry parameters
+  odometry_.setWheelParams(wheel_radius_, wheel_base_);
+  ROS_INFO_STREAM_NAMED(name_, "Odometry params : "
+                                   << ", wheel radius " << wheel_radius_
+                                   << ", wheel base " << wheel_base_);
 
-
-  double wheel_rotation;
-  if(!uvk.getRotationBetweenJoints(drive_wheel_name, "base_footprint_joint", wheel_rotation))
-  {
-    return false;
-  }
-
-  ROS_INFO("Wheel rotation is: %f", wheel_rotation);
-  if(fabs(wheel_rotation) < 0.01)
-  {
-    ROS_INFO("Setting wheel direction to not revesed");
-    wheel_is_reversed_ = false;
-  }else if(fabs(wheel_rotation - M_PI) < 0.01)
-  {
-    ROS_INFO("Setting wheel direction to reversed");
-    wheel_is_reversed_ = true;
-  }else
-  {
-    ROS_INFO_STREAM_NAMED(name_,
-                          "Only wheels that are mounted with center forwards "
-                          << "or backwards are supported at this time. Aborting!");
-  }
-
-  if(!uvk.getJointRadius(drive_wheel_name, drive_wheel_radius_))
-  {
-    return false;
-  }
-
-  ROS_INFO("Wheel base set to: %f, and radius to: %f", wheel_base_, drive_wheel_radius_);
   drive_wheel_kinematics_.setMountPose(wheel_base_, 0);
-  drive_wheel_kinematics_.setRadius(drive_wheel_radius_);
+  drive_wheel_kinematics_.setRadius(wheel_radius_);
 
-  ROS_INFO_STREAM_NAMED(name_,
-                        "Adding drive wheel with joint name: " << drive_wheel_name
-                        << " and steer with joint name: " << drive_wheel_steer_name);
+  setOdomPubFields(root_nh, controller_nh);
 
-  drive_wheel_joint_ = hw_vel->getHandle(drive_wheel_name);
-  drive_wheel_steer_joint_ = hw_pos->getHandle(drive_wheel_steer_name);
+  hardware_interface::VelocityJointInterface *const vel_joint_hw =
+      robot_hw->get<hardware_interface::VelocityJointInterface>();
 
-  cmd_vel_sub_ = controller_nh.subscribe<geometry_msgs::Twist>("command", 1, &TricycleController::cmdVelCallback, this);
+  hardware_interface::PositionJointInterface *const pos_joint_hw =
+      robot_hw->get<hardware_interface::PositionJointInterface>();
+
+  ROS_INFO_STREAM_NAMED(
+      name_, "Adding drive wheel with joint name: " << drive_wheel_joint_name);
+  drive_wheel_joint_ =
+      vel_joint_hw->getHandle(drive_wheel_joint_name); // throws on failure
+
+  ROS_INFO_STREAM_NAMED(
+      name_, "Adding steering with joint name: " << steer_joint_name);
+
+  steer_joint_ = pos_joint_hw->getHandle(steer_joint_name); // throws on failure
+
+  sub_command_ = controller_nh.subscribe(
+      "cmd_vel", 1, &TricycleController::cmdVelCallback, this);
 
   return true;
 }
 
-void TricycleController::cmdVelCallback(const geometry_msgs::TwistConstPtr& cmd_vel_msg)
-{
-  if(isRunning())
-  {
-    setCmdVel(cmd_vel_msg);
+void TricycleController::update(const ros::Time &time,
+                                const ros::Duration &period) {
+  updateOdometry(time);
+  updateCommand(time, period);
+}
+
+void TricycleController::starting(const ros::Time &time) {
+  brake();
+
+  // Register starting time used to keep fixed rate
+  last_state_publish_time_ = time;
+
+  odometry_.init(time);
+}
+
+void TricycleController::stopping(const ros::Time & /*time*/) { brake(); }
+
+void TricycleController::updateOdometry(const ros::Time &time) {
+  // Compute odometry
+  if (open_loop_) {
+    odometry_.updateOpenLoop(last0_cmd_.lin, last0_cmd_.ang, time);
   }
-  else
-  {
-    ROS_ERROR_NAMED(name_, "Can't accept new commands. Controller is not running.");
+
+  const double steer_pos = steer_joint_.getPosition();
+  const double drive_wheel_pos = drive_wheel_joint_.getPosition();
+
+  odometry_.update(steer_pos, drive_wheel_pos, time);
+
+  ROS_DEBUG("Odom: x: %f, y: %f, heading: %f", odometry_.getX(),
+            odometry_.getY(), odometry_.getHeading());
+
+  // Publish odometry message
+  if (last_state_publish_time_ + publish_period_ < time) {
+    last_state_publish_time_ += publish_period_;
+    // Compute and store orientation info
+    const geometry_msgs::Quaternion orientation(
+        tf::createQuaternionMsgFromYaw(odometry_.getHeading()));
+
+    // Populate odom message and publish
+    if (odom_pub_->trylock()) {
+      odom_pub_->msg_.header.stamp = time;
+      odom_pub_->msg_.pose.pose.position.x = odometry_.getX();
+      odom_pub_->msg_.pose.pose.position.y = odometry_.getY();
+      odom_pub_->msg_.pose.pose.orientation = orientation;
+      odom_pub_->msg_.twist.twist.linear.x = odometry_.getLinear();
+      odom_pub_->msg_.twist.twist.angular.z = odometry_.getAngular();
+      odom_pub_->unlockAndPublish();
+    }
+
+    // Publish tf /odom frame
+    if (enable_odom_tf_ && tf_odom_pub_->trylock()) {
+      geometry_msgs::TransformStamped &odom_frame =
+          tf_odom_pub_->msg_.transforms[0];
+      odom_frame.header.stamp = time;
+      odom_frame.transform.translation.x = odometry_.getX();
+      odom_frame.transform.translation.y = odometry_.getY();
+      odom_frame.transform.rotation = orientation;
+      tf_odom_pub_->unlockAndPublish();
+    }
   }
 }
 
-void TricycleController::setCmdVel(const geometry_msgs::TwistConstPtr& cmd_vel_msg)
-{
-  command_struct_.linear = cmd_vel_msg->linear.x;
-  command_struct_.angular = cmd_vel_msg->angular.z;
-  command_struct_.stamp = ros::Time::now();
+void TricycleController::updateCommand(const ros::Time &time,
+                                       const ros::Duration &period) {
+  // Retreive current velocity command and time step:
+  Command curr_cmd = *(command_.readFromRT());
+  const double dt = (time - curr_cmd.stamp).toSec();
 
-  command_.writeFromNonRT (command_struct_);
-}
-
-void TricycleController::starting(const ros::Time& time)
-{
-
-}
-
-void TricycleController::update(const ros::Time& time, const ros::Duration& period)
-{
-  update_movement(time, period);
-}
-
-void TricycleController::update_movement(const ros::Time& time, const ros::Duration& period)
-{
-
-  Commands current_command = *(command_.readFromRT());
-  const double dt = (time - current_command.stamp).toSec();
-
-  // Stop if time between cmd_vel messages is longer than set timeout
-  if(dt > cmd_vel_timeout_)
-  {
-    current_command.linear = 0.0;
-    current_command.angular = 0.0;
+  // Brake if cmd_vel has timeout:
+  if (dt > cmd_vel_timeout_) {
+    curr_cmd.lin = 0.0;
+    curr_cmd.ang = 0.0;
   }
 
   const double cmd_dt(period.toSec());
 
-  //FIXME: prevent oscillations
-  if(current_command.linear != 0)
-  {
-    limiter_linear_.limit(current_command.linear, last0_cmd_.linear, last1_cmd_.linear, cmd_dt);
-  }
+  const double angular_speed = odometry_.getAngular();
 
-  if(current_command.angular != 0)
-  {
-    limiter_angular_.limit(current_command.angular, last0_cmd_.angular, last1_cmd_.angular, cmd_dt);
-  }
+  // Limit velocities and accelerations:
+  limiter_lin_.limit(curr_cmd.lin, last0_cmd_.lin, last1_cmd_.lin, cmd_dt);
+  limiter_ang_.limit(curr_cmd.ang, last0_cmd_.ang, last1_cmd_.ang, cmd_dt);
 
   last1_cmd_ = last0_cmd_;
-  last0_cmd_ = current_command;
+  last0_cmd_ = curr_cmd;
 
-  drive_wheel_kinematics_.setCommand(current_command.linear, current_command.angular);
+  drive_wheel_kinematics_.setCommand(curr_cmd.lin, curr_cmd.ang);
   drive_wheel_kinematics_.update();
 
-  double desired_steer_angle = drive_wheel_kinematics_.getSteer();
-  double steer_angle_state = drive_wheel_steer_joint_.getPosition();
+  double steer_angle = drive_wheel_kinematics_.getSteer();
+  double steer_angle_state = steer_joint_.getPosition();
 
-  //FIXME: do this in wheel_kinematics instaid...
-  if(wheel_is_reversed_)
+  double drive_wheel_vel = drive_wheel_kinematics_.getAngularVelocity();
+
+  if(fabs(steer_angle_state - steer_angle) > angle_tolerance_)
   {
-    desired_steer_angle = -desired_steer_angle;
+    drive_wheel_vel = 0;
   }
 
-  double filtered_steer_angle = desired_steer_angle;
-  limiter_steer_servo_.limit(filtered_steer_angle, cmd_dt);
+  drive_wheel_joint_.setCommand(drive_wheel_vel);
+  steer_joint_.setCommand(steer_angle);
+}
 
-  last1_steer_angle_ = last0_steer_angle_;
-  last0_steer_angle_ = filtered_steer_angle;
+void TricycleController::brake() {
+  const double vel = 0.0;
+  drive_wheel_joint_.setCommand(vel);
 
-  double desired_angular_velocity = drive_wheel_kinematics_.getAngularVelocity();
+  // const double pos = 0.0;
+  // steer_joint_.setCommand(pos);
+}
 
-  // ROS_INFO("desired: %f, state: %f, fabs: %f", desired_steer_angle, steer_angle_state, fabs(steer_angle_state - desired_steer_angle) );
-  if(fabs(steer_angle_state - desired_steer_angle) > angle_tolerance_)
-  {
-    desired_angular_velocity = 0;
+void TricycleController::cmdVelCallback(const geometry_msgs::Twist &command) {
+  if (isRunning()) {
+    // check that we don't have multiple publishers on the command topic
+    if (!allow_multiple_cmd_vel_publishers_ &&
+        sub_command_.getNumPublishers() > 1) {
+      ROS_ERROR_STREAM_THROTTLE_NAMED(
+          1.0, name_,
+          "Detected "
+              << sub_command_.getNumPublishers()
+              << " publishers. Only 1 publisher is allowed. Going to brake.");
+      brake();
+      return;
+    }
+
+    command_struct_.ang = command.angular.z;
+    command_struct_.lin = command.linear.x;
+    command_struct_.stamp = ros::Time::now();
+    command_.writeFromNonRT(command_struct_);
+    ROS_DEBUG_STREAM_NAMED(name_, "Added values to command. "
+                                      << "Ang: " << command_struct_.ang << ", "
+                                      << "Lin: " << command_struct_.lin << ", "
+                                      << "Stamp: " << command_struct_.stamp);
+  } else {
+    ROS_ERROR_NAMED(name_,
+                    "Can't accept new commands. Controller is not running.");
+  }
+}
+
+bool TricycleController::getJointName(ros::NodeHandle &controller_nh,
+                                      const std::string &wheel_param,
+                                      std::string &wheel_name) {
+  XmlRpc::XmlRpcValue wheel_list;
+  if (!controller_nh.getParam(wheel_param, wheel_list)) {
+    ROS_ERROR_STREAM_NAMED(name_, "Couldn't retrieve wheel param '"
+                                      << wheel_param << "'.");
+    return false;
   }
 
-  double filtered_angular_velocity = desired_angular_velocity;
-  if(desired_angular_velocity != 0)
-  {
-    limiter_wheel_motor_.limit(filtered_angular_velocity, last0_wheel_speed_, last1_wheel_speed_, cmd_dt);
-  }
+  if (wheel_list.getType() == XmlRpc::XmlRpcValue::TypeArray) {
+    if (wheel_list.size() == 0) {
+      ROS_ERROR_STREAM_NAMED(name_, "Wheel param '" << wheel_param
+                                                    << "' is an empty list");
+      return false;
+    }
 
-  last1_wheel_speed_ = last0_wheel_speed_;
-  last0_wheel_speed_ = filtered_angular_velocity;
-
-  //ROS_INFO("Applied wheel speed: %f", filtered_angular_velocity);
-  //ROS_INFO("Applied steer angle: %f, desired: %f", filtered_steer_angle, desired_steer_angle);
-  // Update joints
-
-  // Prevent platform from stopping because wheel speed is to low
-  if(fabs(filtered_angular_velocity) < drive_wheel_stop_vel_)
-  {
-    filtered_angular_velocity = 0.0;
-  } else
-  {
-    if(fabs(filtered_angular_velocity) < drive_wheel_min_vel_)
-    {
-      if(filtered_angular_velocity > 0)
-      {
-        filtered_angular_velocity = drive_wheel_min_vel_;
-      } else
-      {
-        filtered_angular_velocity = -drive_wheel_min_vel_;
+    for (int i = 0; i < wheel_list.size(); ++i) {
+      if (wheel_list[i].getType() != XmlRpc::XmlRpcValue::TypeString) {
+        ROS_ERROR_STREAM_NAMED(name_, "Wheel param '" << wheel_param << "' #"
+                                                      << i
+                                                      << " isn't a string.");
+        return false;
       }
     }
+    wheel_name = static_cast<std::string>(wheel_list[0]);
+  } else if (wheel_list.getType() == XmlRpc::XmlRpcValue::TypeString) {
+    wheel_name = static_cast<std::string>(wheel_list);
+  } else {
+    ROS_ERROR_STREAM_NAMED(
+        name_, "Wheel param '"
+                   << wheel_param
+                   << "' is neither a list of strings nor a string.");
+    return false;
   }
-  //ROS_INFO("Applied steer angle: %f", filtered_steer_angle);
 
-  drive_wheel_joint_.setCommand(filtered_angular_velocity);
-  drive_wheel_steer_joint_.setCommand(filtered_steer_angle);
-
-  /*
-  * Publish desired steer angle on /base_controller/desired_steer_angle topic
-  * Published data will be a Float64 array on the form: 
-  * [timestamp_nanosecs desired_steer_angle]
-  */
-  std_msgs::Float64MultiArray msg;
-  double nsecs = ros::Time::now().toNSec();
-  msg.data.clear();
-  msg.data.push_back(nsecs);
-  msg.data.push_back(filtered_steer_angle);
-  tricycle_pub.publish(msg);
+  return true;
 }
 
-void TricycleController::update_odoemtry(const ros::Time& time, const ros::Duration& period)
-{
-  //TODO: implement
+void TricycleController::setOdomPubFields(ros::NodeHandle &root_nh,
+                                          ros::NodeHandle &controller_nh) {
+  // Get and check params for covariances
+  XmlRpc::XmlRpcValue pose_cov_list;
+  if (!controller_nh.getParam("pose_covariance_diagonal", pose_cov_list)) {
+    ROS_ERROR_STREAM("Param pose_covariance_diagonal not found");
+  }
+
+  ROS_ASSERT(pose_cov_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
+  ROS_ASSERT(pose_cov_list.size() == 6);
+  for (int i = 0; i < pose_cov_list.size(); ++i)
+    ROS_ASSERT(pose_cov_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+
+  XmlRpc::XmlRpcValue twist_cov_list;
+  if (!controller_nh.getParam("twist_covariance_diagonal", twist_cov_list)) {
+    ROS_ERROR_STREAM("Param twist_covariance_diagonal not found");
+  }
+  ROS_ASSERT(twist_cov_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
+  ROS_ASSERT(twist_cov_list.size() == 6);
+  for (int i = 0; i < twist_cov_list.size(); ++i)
+    ROS_ASSERT(twist_cov_list[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+
+  // Setup odometry realtime publisher + odom message constant fields
+  odom_pub_.reset(new realtime_tools::RealtimePublisher<nav_msgs::Odometry>(
+      controller_nh, "odom", 100));
+  odom_pub_->msg_.header.frame_id = odom_frame_id_;
+  odom_pub_->msg_.child_frame_id = base_frame_id_;
+  odom_pub_->msg_.pose.pose.position.z = 0;
+  odom_pub_->msg_.pose.covariance =
+      boost::assign::list_of(static_cast<double>(pose_cov_list[0]))(0)(0)(0)(0)(
+          0)(0)(static_cast<double>(pose_cov_list[1]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(pose_cov_list[2]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(pose_cov_list[3]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(pose_cov_list[4]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(pose_cov_list[5]));
+  odom_pub_->msg_.twist.twist.linear.y = 0;
+  odom_pub_->msg_.twist.twist.linear.z = 0;
+  odom_pub_->msg_.twist.twist.angular.x = 0;
+  odom_pub_->msg_.twist.twist.angular.y = 0;
+  odom_pub_->msg_.twist.covariance =
+      boost::assign::list_of(static_cast<double>(twist_cov_list[0]))(0)(0)(0)(
+          0)(0)(0)(static_cast<double>(twist_cov_list[1]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(twist_cov_list[2]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(twist_cov_list[3]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(twist_cov_list[4]))(0)(0)(0)(0)(0)(0)(
+          static_cast<double>(twist_cov_list[5]));
+  tf_odom_pub_.reset(new realtime_tools::RealtimePublisher<tf::tfMessage>(
+      root_nh, "/tf", 100));
+  tf_odom_pub_->msg_.transforms.resize(1);
+  tf_odom_pub_->msg_.transforms[0].transform.translation.z = 0.0;
+  tf_odom_pub_->msg_.transforms[0].child_frame_id = base_frame_id_;
+  tf_odom_pub_->msg_.transforms[0].header.frame_id = odom_frame_id_;
 }
 
-void TricycleController::stopping(const ros::Time&)
-{
-  drive_wheel_joint_.setCommand(0);
-}
-
-}
+} // namespace tricycle_controller

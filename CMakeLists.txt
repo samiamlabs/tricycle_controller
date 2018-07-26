@@ -8,14 +8,12 @@ file(GLOB_RECURSE EXTRA_FILES */*)
 add_custom_target(${PROJECT_NAME}_OTHER_FILES ALL WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} SOURCES ${EXTRA_FILES})
 
 set(${PROJECT_NAME}_CATKIN_DEPS
-    roscpp
-    controller_interface
-    nav_msgs
-    realtime_tools
-    tf
-    urdf_vehicle_kinematic)
-
-
+  controller_interface
+  nav_msgs
+  realtime_tools
+  tf
+  urdf_geometry_parser
+)
 
 find_package(catkin REQUIRED COMPONENTS ${${PROJECT_NAME}_CATKIN_DEPS})
 
@@ -29,7 +27,7 @@ include_directories(
   include ${catkin_INCLUDE_DIRS}
 )
 
-add_library(${PROJECT_NAME} src/tricycle_controller.cpp src/speed_limiter.cpp src/wheel_kinematics.cpp )
+add_library(${PROJECT_NAME} src/tricycle_controller.cpp src/odometry.cpp src/speed_limiter.cpp src/wheel_kinematics.cpp )
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
 install(TARGETS ${PROJECT_NAME}
@@ -46,11 +44,17 @@ install(DIRECTORY include/${PROJECT_NAME}/
   )
 
 if(CATKIN_ENABLE_TESTING)
-  find_package(catkin REQUIRED COMPONENTS roscpp rostest std_srvs controller_manager tf)
+  find_package(catkin REQUIRED COMPONENTS rosgraph_msgs rostest std_srvs controller_manager tf)
 
-  add_executable(example_driver_node test/src/example_driver_node.cpp)
-  target_link_libraries(example_driver_node ${catkin_LIBRARIES})
+  add_executable(tricycle test/src/tricycle.cpp)
+  target_link_libraries(tricycle ${catkin_LIBRARIES})
 
-  add_dependencies(tests example_driver_node)
+  add_dependencies(tests tricycle)
+
+  add_rostest_gtest(tricycle_controller_twist_cmd_test
+                  test/tricycle_controller_twist_cmd.test
+                  test/src/tricycle_twist_cmd_test.cpp)
+
+  target_link_libraries(tricycle_controller_twist_cmd_test ${catkin_LIBRARIES})
 
 endif()

@@ -1,8 +1,0 @@
-minireach_controller:
-  type: tricycle_controller/TricycleController
-  drive_wheel: wheel_drive_joint
-  drive_wheel_steer: wheel_steer_joint
-# Publish all joint states -----------------------------------
-joint_state_controller:
-  type: joint_state_controller/JointStateController
-  publish_rate: 50

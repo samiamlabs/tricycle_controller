@@ -1,0 +1,13 @@
+<launch>
+  <!-- Load common test stuff -->
+  <include file="$(find tricycle_controller)/test/launch/tricycle_common.launch" />
+
+  <!-- Controller test -->
+  <test test-name="tricycle_controller_twist_cmd_test"
+        pkg="tricycle_controller"
+        type="tricycle_controller_twist_cmd_test"
+        time-limit="80.0">
+    <remap from="cmd_vel" to="tricycle_controller/cmd_vel" />
+    <remap from="odom" to="tricycle_controller/odom" />
+  </test>
+</launch>

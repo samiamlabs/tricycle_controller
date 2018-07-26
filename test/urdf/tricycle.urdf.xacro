@@ -1,36 +1,58 @@
 <?xml version="1.0"?>
 
-<robot name="ackermann_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<robot name="tricycle_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:include filename="$(find tricycle_controller)/test/urdf/chassis.xacro" />
-  <xacro:include filename="$(find tricycle_controller)/test/urdf/wheel_steered.xacro" />
-  <xacro:include filename="$(find tricycle_controller)/test/urdf/rear_wheel.xacro" />
+  <xacro:include filename="materials.xacro"/>
+  <xacro:include filename="utils.urdf.xacro"/>
 
-  <xacro:property name="M_PI" value="3.14159"/>
+  <xacro:include filename="tricycle.gazebo.xacro"/>
 
-  <!-- Wheel Mounting Positions -->
-  <xacro:property name="ground_clearance" value="0.19" />
-  <xacro:property name="wheel_x_offset" value="0.2" />
-  <xacro:property name="wheel_y_offset" value="0.05" />
+  <xacro:include filename="support_wheel.urdf.xacro"/>
+  <xacro:include filename="drive_wheel_assembly.urdf.xacro"/>
 
-  <xacro:chassis/>
+  <link name="base_link">
+    <visual>
+      <origin xyz="0.08 0 0.03" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.2 0.08"/>
+      </geometry>
+      <material name="light_blue"/>
+    </visual>
 
-  <!-- Wheel macros -->
-  <xacro:wheel_steered wheel_prefix="front" parent_link="base_link" wheel_origin_y="${-wheel_y_offset}" left_right="1">
-    <origin xyz="${wheelbase+wheel_x_offset} 0 ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
-  </xacro:wheel_steered>
+    <collision>
+      <origin xyz="0.08 0 0.03" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.25 0.2 0.08"/>
+      </geometry>
+      <material name="dark"/>
+    </collision>
 
-  <xacro:rear_wheel wheel_prefix="rear_left" parent_link="base_link" left_right="-1">
-    <origin xyz="0 ${track/2} ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
-  </xacro:rear_wheel>
+    <!-- Set hight weight and low interia for now -->
+    <inertial>
+      <origin xyz="0.1 0 0" rpy="0 0 0"/>
+      <mass value="10"/>
+      <box_inertia m="0.1" x="0.3" y="0.25" z="0.1"/>
+    </inertial>
+  </link>
 
-  <xacro:rear_wheel wheel_prefix="rear_right" parent_link="base_link" left_right="1">
-    <origin xyz="0 ${-track/2} ${-base_z_size/2 + wheel_radius - ground_clearance}" rpy="0 0 0" />
-  </xacro:rear_wheel>
+  <!-- Base footprint -->
+  <link name="base_footprint"/>
 
-  <!-- Gazebo plugin for ROS Control -->
-  <gazebo>
-    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
-  </gazebo>
+  <joint name="base_footprint_joint" type="fixed">
+    <origin xyz="0 0 0.025" rpy="0 0 0"/>
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+  </joint>
+
+  <!-- Macros -->
+  <xacro:property name="support_wheel_separation" value="0.217"/>
+
+  <support_wheel name="support_wheel_right" separation="${support_wheel_separation}" reflect="1.0" parent="base_link"/>
+  <support_wheel name="support_wheel_left" separation="${support_wheel_separation}" reflect="-1.0" parent="base_link"/>
+
+  <drive_wheel_assembly/>
+
+  <!-- Gazebo extentions -->
+  <base_gazebo/>
 
 </robot>
