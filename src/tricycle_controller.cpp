@@ -16,7 +16,8 @@ namespace tricycle_controller {
 TricycleController::TricycleController()
     : command_struct_(), wheel_radius_(0.0), wheel_base_(0.0),
       cmd_vel_timeout_(0.5), base_frame_id_("base_footprint"),
-      odom_frame_id_("odom"), enable_odom_tf_(true), angle_tolerance_(0.2) {}
+      odom_frame_id_("odom"), enable_odom_tf_(true), angle_tolerance_(0.2),
+      post_date_odom_tf_(true) {}
 
 bool TricycleController::init(hardware_interface::RobotHW *robot_hw,
                               ros::NodeHandle &root_nh,
@@ -199,9 +200,14 @@ void TricycleController::updateOdometry(const ros::Time &time) {
     const geometry_msgs::Quaternion orientation(
         tf::createQuaternionMsgFromYaw(odometry_.getHeading()));
 
+    ros::Time tf_stamp = time;
+    if (post_date_odom_tf_) {
+      tf_stamp -= ros::Duration(0.1);
+    }
+
     // Populate odom message and publish
     if (odom_pub_->trylock()) {
-      odom_pub_->msg_.header.stamp = time;
+      odom_pub_->msg_.header.stamp = tf_stamp;
       odom_pub_->msg_.pose.pose.position.x = odometry_.getX();
       odom_pub_->msg_.pose.pose.position.y = odometry_.getY();
       odom_pub_->msg_.pose.pose.orientation = orientation;
@@ -214,7 +220,7 @@ void TricycleController::updateOdometry(const ros::Time &time) {
     if (enable_odom_tf_ && tf_odom_pub_->trylock()) {
       geometry_msgs::TransformStamped &odom_frame =
           tf_odom_pub_->msg_.transforms[0];
-      odom_frame.header.stamp = time;
+      odom_frame.header.stamp = tf_stamp;
       odom_frame.transform.translation.x = odometry_.getX();
       odom_frame.transform.translation.y = odometry_.getY();
       odom_frame.transform.rotation = orientation;
